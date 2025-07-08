@@ -1,0 +1,29 @@
+# Node modules
+node_modules/
+
+# Build output
+build/
+dist/
+
+# Cache
+.cache/
+.npm/
+.yarn/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+
+# Environment files
+.env
+.env.*
+
+# Misc
+coverage/
+*.tgz
+
+# IDEs
+.vscode/
+.idea/ 

@@ -330,25 +330,11 @@ const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
       <h2 className="text-2xl font-bold mb-4">Balances</h2>
       <div className="flex flex-col sm:flex-row gap-2 mb-4">
         <button
-          onClick={handleSettleAll}
-          disabled={settlingAll}
-          className={`px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${settlingAll ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          {settlingAll ? 'Settling...' : 'Settle All & Download Report'}
-        </button>
-        <button
           onClick={handleClearAllExpenses}
           disabled={settlingAll}
           className={`px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${settlingAll ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           {settlingAll ? 'Clearing...' : 'Settle All (Delete All)'}
-        </button>
-        <button
-          onClick={handleDownloadCSV}
-          disabled={settlingAll}
-          className={`px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${settlingAll ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          Download for Google Sheets (CSV)
         </button>
       </div>
       <div className="mb-4 text-sm text-gray-600">

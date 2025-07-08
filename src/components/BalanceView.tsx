@@ -269,6 +269,62 @@ const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
     }
   };
 
+  // New: Download all expenses as CSV for Google Sheets
+  const handleDownloadCSV = async () => {
+    if (!groupId) return;
+    try {
+      setError(null);
+      setSuccess(null);
+      // Fetch all expenses
+      const expensesRef = collection(db, 'groups', groupId, 'expenses');
+      const expensesSnapshot = await getDocs(expensesRef);
+      const expensesData: Expense[] = [];
+      expensesSnapshot.forEach(doc => {
+        const data = doc.data();
+        expensesData.push({
+          id: doc.id,
+          description: data.description,
+          amount: data.amount,
+          date: data.date.toDate(),
+          paidBy: data.paidBy,
+          members: data.members || [],
+          splitType: data.splitType,
+          createdAt: data.createdAt?.toDate() || new Date(),
+        });
+      });
+      // Prepare CSV rows
+      const csvRows = [
+        [
+          'Description',
+          'Amount',
+          'Date',
+          'Paid By',
+          'Split Among',
+          'Split Type',
+          'Created At',
+        ],
+        ...expensesData.map(exp => [
+          exp.description,
+          exp.amount,
+          exp.date.toLocaleDateString(),
+          exp.paidBy,
+          exp.members.join(', '),
+          exp.splitType,
+          exp.createdAt.toLocaleString(),
+        ]),
+      ];
+      // Convert to CSV string
+      const csvContent = csvRows.map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(',')).join('\n');
+      // Download as file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      saveAs(blob, `Expenses_${new Date().toLocaleDateString()}.csv`);
+      setSuccess('CSV downloaded! You can import this file into Google Sheets.');
+    } catch (err) {
+      setError('Failed to download CSV. Please try again.');
+      console.error(err);
+    }
+  };
+
   return (
     <div className="p-4 bg-white rounded shadow">
       <h2 className="text-2xl font-bold mb-4">Balances</h2>
@@ -287,6 +343,16 @@ const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
         >
           {settlingAll ? 'Clearing...' : 'Settle All (Delete All)'}
         </button>
+        <button
+          onClick={handleDownloadCSV}
+          disabled={settlingAll}
+          className={`px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${settlingAll ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          Download for Google Sheets (CSV)
+        </button>
+      </div>
+      <div className="mb-4 text-sm text-gray-600">
+        Tip: You can import the downloaded CSV file directly into Google Sheets to view and analyze your expenses and settlements.
       </div>
       {error && <div className="mb-2 text-red-600">{error}</div>}
       {success && <div className="mb-2 text-green-600">{success}</div>}
@@ -300,13 +366,6 @@ const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
               <span>owes</span>
               <span className="font-medium">{transaction.to}</span>
               <span className="text-green-600">₹{transaction.amount.toFixed(2)}</span>
-              <button
-                onClick={() => settleTransaction(transaction.from, transaction.to, transaction.amount, index)}
-                className={`bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded ${settlingIndex === index ? 'opacity-50 cursor-not-allowed' : ''}`}
-                disabled={settlingIndex === index}
-              >
-                {settlingIndex === index ? 'Settling...' : 'Settle'}
-              </button>
             </div>
           ))}
         </div>

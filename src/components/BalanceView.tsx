@@ -86,6 +86,7 @@ const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
           createdAt: data.createdAt.toDate(),
         });
       });
+      console.log("Expenses fetched:", expensesData); // Debug log
       calculateTransactions(expensesData);
     });
 

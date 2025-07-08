@@ -281,17 +281,33 @@ const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
       const expensesData: Expense[] = [];
       expensesSnapshot.forEach(doc => {
         const data = doc.data();
+        let dateObj: Date | null = null;
+        let createdAtObj: Date | null = null;
+        try {
+          dateObj = data.date && typeof data.date.toDate === 'function' ? data.date.toDate() : (data.date instanceof Date ? data.date : null);
+        } catch (e) {
+          dateObj = null;
+        }
+        try {
+          createdAtObj = data.createdAt && typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate() : (data.createdAt instanceof Date ? data.createdAt : null);
+        } catch (e) {
+          createdAtObj = null;
+        }
         expensesData.push({
           id: doc.id,
-          description: data.description,
-          amount: data.amount,
-          date: data.date.toDate(),
-          paidBy: data.paidBy,
-          members: data.members || [],
-          splitType: data.splitType,
-          createdAt: data.createdAt?.toDate() || new Date(),
+          description: data.description || '',
+          amount: typeof data.amount === 'number' ? data.amount : 0,
+          date: dateObj || new Date(0),
+          paidBy: data.paidBy || '',
+          members: Array.isArray(data.members) ? data.members : [],
+          splitType: data.splitType || '',
+          createdAt: createdAtObj || new Date(0),
         });
       });
+      if (expensesData.length === 0) {
+        setError('No expenses to export.');
+        return;
+      }
       // Prepare CSV rows
       const csvRows = [
         [
@@ -306,11 +322,11 @@ const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
         ...expensesData.map(exp => [
           exp.description,
           exp.amount,
-          exp.date.toLocaleDateString(),
+          exp.date instanceof Date && !isNaN(exp.date.getTime()) ? exp.date.toLocaleDateString() : '',
           exp.paidBy,
           exp.members.join(', '),
           exp.splitType,
-          exp.createdAt.toLocaleString(),
+          exp.createdAt instanceof Date && !isNaN(exp.createdAt.getTime()) ? exp.createdAt.toLocaleString() : '',
         ]),
       ];
       // Convert to CSV string
@@ -320,8 +336,12 @@ const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
       saveAs(blob, `Expenses_${new Date().toLocaleDateString()}.csv`);
       setSuccess('CSV downloaded! You can import this file into Google Sheets.');
     } catch (err) {
-      setError('Failed to download CSV. Please try again.');
-      console.error(err);
+      let errorMsg = 'Failed to download CSV. Please try again.';
+      if (err instanceof Error) {
+        errorMsg += ` Error: ${err.message}`;
+      }
+      setError(errorMsg);
+      console.error('CSV Download Error:', err);
     }
   };
 

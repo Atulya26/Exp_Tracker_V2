@@ -241,22 +241,57 @@ const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
     }
   };
 
+  // New: Settle all (delete all expenses, reset to zero state)
+  const handleClearAllExpenses = async () => {
+    if (!groupId) return;
+    if (!window.confirm("Are you sure you want to delete ALL expenses and reset all balances? This cannot be undone.")) {
+      return;
+    }
+    try {
+      setError(null);
+      setSuccess(null);
+      setSettlingAll(true);
+      // Delete all expenses
+      const expensesRef = collection(db, 'groups', groupId, 'expenses');
+      const expensesSnapshot = await getDocs(expensesRef);
+      const deletePromises: Promise<void>[] = [];
+      expensesSnapshot.forEach((expenseDoc) => {
+        deletePromises.push(deleteDoc(doc(db, 'groups', groupId, 'expenses', expenseDoc.id)));
+      });
+      await Promise.all(deletePromises);
+      setTransactions([]);
+      setSuccess('All expenses deleted. All balances are now settled.');
+    } catch (err) {
+      setError('Failed to delete all expenses. Please try again.');
+      console.error(err);
+    } finally {
+      setSettlingAll(false);
+    }
+  };
+
   return (
     <div className="p-4 bg-white rounded shadow">
       <h2 className="text-2xl font-bold mb-4">Balances</h2>
-      <button
-        onClick={handleSettleAll}
-        disabled={settlingAll}
-        className={`mb-4 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
-          settlingAll ? 'opacity-50 cursor-not-allowed' : ''
-        }`}
-      >
-        {settlingAll ? 'Settling...' : 'Settle All & Download Report'}
-      </button>
+      <div className="flex flex-col sm:flex-row gap-2 mb-4">
+        <button
+          onClick={handleSettleAll}
+          disabled={settlingAll}
+          className={`px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${settlingAll ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          {settlingAll ? 'Settling...' : 'Settle All & Download Report'}
+        </button>
+        <button
+          onClick={handleClearAllExpenses}
+          disabled={settlingAll}
+          className={`px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${settlingAll ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          {settlingAll ? 'Clearing...' : 'Settle All (Delete All)'}
+        </button>
+      </div>
       {error && <div className="mb-2 text-red-600">{error}</div>}
       {success && <div className="mb-2 text-green-600">{success}</div>}
       {transactions.length === 0 ? (
-        <p>No balances to display yet.</p>
+        <p className="text-gray-500">No balances to display yet. Add expenses with more than one member to see balances.</p>
       ) : (
         <div className="space-y-2">
           {transactions.map((transaction, index) => (

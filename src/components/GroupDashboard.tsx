@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, Routes, Route, Navigate } from 'react-router-dom';
-import { db, auth } from '../firebaseConfig';
+import { db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 import AddExpense from './AddExpense';
 import ExpenseList from './ExpenseList';
@@ -9,7 +9,6 @@ import BalanceView from './BalanceView';
 interface GroupData {
   name: string;
   members: string[];
-  createdBy: string;
   createdAt: Date;
 }
 
@@ -22,34 +21,18 @@ const GroupDashboard: React.FC = () => {
   useEffect(() => {
     const fetchGroup = async () => {
       if (!groupId) return;
-      
       try {
         setLoading(true);
         setError(null);
-        
         const groupDocRef = doc(db, "groups", groupId);
         const groupDocSnap = await getDoc(groupDocRef);
-        
         if (groupDocSnap.exists()) {
           const data = groupDocSnap.data();
           const groupData: GroupData = {
             name: data.name,
             members: data.members || [],
-            createdBy: data.createdBy || '',
             createdAt: data.createdAt?.toDate() || new Date(),
           };
-          
-          // Check if current user has access to this group
-          const currentUserEmail = auth.currentUser?.email;
-          const currentUserId = auth.currentUser?.uid;
-          
-          if (!currentUserEmail || 
-              (!groupData.members.includes(currentUserEmail) && 
-               groupData.createdBy !== currentUserId)) {
-            setError("You don't have access to this group.");
-            return;
-          }
-          
           setGroup(groupData);
         } else {
           setError("Group not found.");
@@ -61,7 +44,6 @@ const GroupDashboard: React.FC = () => {
         setLoading(false);
       }
     };
-    
     fetchGroup();
   }, [groupId]);
 
@@ -75,7 +57,6 @@ const GroupDashboard: React.FC = () => {
       </div>
     );
   }
-
   if (error) {
     return (
       <div className="p-4 bg-white rounded shadow">
@@ -92,15 +73,12 @@ const GroupDashboard: React.FC = () => {
       </div>
     );
   }
-
   if (!group) {
     return <Navigate to="/" replace />;
   }
-
   if (!groupId) {
     return <Navigate to="/" replace />;
   }
-
   return (
     <div className="p-4 bg-white rounded shadow">
       <div className="mb-4">
@@ -110,7 +88,6 @@ const GroupDashboard: React.FC = () => {
           Created: {group.createdAt.toLocaleDateString()}
         </p>
       </div>
-
       <nav className="bg-gray-100 p-3 rounded mb-6">
         <ul className="flex justify-around">
           <li>
@@ -139,7 +116,6 @@ const GroupDashboard: React.FC = () => {
           </li>
         </ul>
       </nav>
-
       <Routes>
         <Route path="add-expense" element={<AddExpense groupId={groupId} groupMembers={group.members} />} />
         <Route path="expenses" element={<ExpenseList groupId={groupId} groupMembers={group.members} />} />

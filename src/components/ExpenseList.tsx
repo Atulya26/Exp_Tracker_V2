@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { db, auth } from '../firebaseConfig';
+import { db } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
 
 interface Expense {
@@ -11,7 +11,6 @@ interface Expense {
   members: string[];
   splitType: string;
   createdAt: Date;
-  createdBy?: string;
 }
 
 interface ExpenseListProps {
@@ -27,10 +26,8 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, groupMembers }) => {
 
   useEffect(() => {
     if (!groupId) return;
-
     setLoading(true);
     setError(null);
-
     const q = query(collection(db, 'groups', groupId, 'expenses'), orderBy('date', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       try {
@@ -46,7 +43,6 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, groupMembers }) => {
             members: data.members || [],
             splitType: data.splitType,
             createdAt: data.createdAt?.toDate() || new Date(),
-            createdBy: data.createdBy,
           });
         });
         setExpenses(expensesData);
@@ -61,20 +57,13 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, groupMembers }) => {
       setError("Failed to load expenses. Please refresh the page.");
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, [groupId]);
 
   const handleDeleteExpense = async (expenseId: string, description: string) => {
-    if (!auth.currentUser) {
-      alert("You must be logged in to delete expenses.");
+    if (!window.confirm(`Are you sure you want to delete \"${description}\"? This action cannot be undone.`)) {
       return;
     }
-
-    if (!window.confirm(`Are you sure you want to delete "${description}"? This action cannot be undone.`)) {
-      return;
-    }
-
     try {
       setDeletingExpense(expenseId);
       await deleteDoc(doc(db, 'groups', groupId, 'expenses', expenseId));
@@ -85,11 +74,6 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, groupMembers }) => {
     } finally {
       setDeletingExpense(null);
     }
-  };
-
-  const canDeleteExpense = (expense: Expense): boolean => {
-    return auth.currentUser?.uid === expense.createdBy || 
-           auth.currentUser?.email === expense.paidBy;
   };
 
   const formatCurrency = (amount: number): string => {
@@ -118,13 +102,11 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, groupMembers }) => {
   return (
     <div className="p-4 bg-white rounded shadow">
       <h2 className="text-2xl font-bold mb-4">Expense List</h2>
-      
       {error && (
         <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
           {error}
         </div>
       )}
-      
       {expenses.length === 0 ? (
         <div className="text-center py-8">
           <p className="text-gray-500 text-lg">No expenses added yet.</p>
@@ -144,11 +126,9 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, groupMembers }) => {
                       </span>
                     )}
                   </div>
-                  
                   <div className="text-2xl font-bold text-green-600 mb-2">
                     {formatCurrency(expense.amount)}
                   </div>
-                  
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600">
                     <div>
                       <span className="font-medium">Date:</span> {formatDate(expense.date)}
@@ -166,24 +146,20 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ groupId, groupMembers }) => {
                     )}
                   </div>
                 </div>
-                
-                {canDeleteExpense(expense) && (
-                  <button
-                    onClick={() => handleDeleteExpense(expense.id, expense.description)}
-                    disabled={deletingExpense === expense.id}
-                    className={`ml-4 px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm ${
-                      deletingExpense === expense.id ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                  >
-                    {deletingExpense === expense.id ? 'Deleting...' : 'Delete'}
-                  </button>
-                )}
+                <button
+                  onClick={() => handleDeleteExpense(expense.id, expense.description)}
+                  disabled={deletingExpense === expense.id}
+                  className={`ml-4 px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm ${
+                    deletingExpense === expense.id ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {deletingExpense === expense.id ? 'Deleting...' : 'Delete'}
+                </button>
               </div>
             </div>
           ))}
         </div>
       )}
-      
       {expenses.length > 0 && (
         <div className="mt-6 p-3 bg-gray-50 rounded">
           <p className="text-sm text-gray-600">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, auth } from '../firebaseConfig';
+import { db } from '../firebaseConfig';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 interface AddExpenseProps {
@@ -28,55 +28,39 @@ const AddExpense: React.FC<AddExpenseProps> = ({ groupId, groupMembers }) => {
     if (!description.trim()) {
       return "Description is required.";
     }
-    
     if (description.trim().length < 3) {
       return "Description must be at least 3 characters long.";
     }
-    
     if (!amount || parseFloat(amount) <= 0) {
       return "Amount must be greater than 0.";
     }
-    
     if (parseFloat(amount) > 1000000) {
       return "Amount cannot exceed 1,000,000.";
     }
-    
     if (!date) {
       return "Date is required.";
     }
-    
     if (!paidBy) {
       return "Please select who paid for this expense.";
     }
-    
     if (selectedMembers.length === 0) {
       return "Please select at least one member to split the expense with.";
     }
-    
     return null;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!auth.currentUser) {
-      setError("You must be logged in to add expenses.");
-      return;
-    }
-    
     const validationError = validateForm();
     if (validationError) {
       setError(validationError);
       return;
     }
-    
     try {
       setLoading(true);
       setError(null);
       setSuccess(null);
-      
       const expenseAmount = parseFloat(amount);
-      
       await addDoc(collection(db, 'groups', groupId, 'expenses'), {
         description: description.trim(),
         amount: expenseAmount,
@@ -84,18 +68,13 @@ const AddExpense: React.FC<AddExpenseProps> = ({ groupId, groupMembers }) => {
         paidBy,
         members: selectedMembers,
         splitType: 'equal',
-        createdBy: auth.currentUser.uid,
         createdAt: serverTimestamp(),
       });
-      
-      // Reset form
       setDescription('');
       setAmount('');
       setDate(new Date().toISOString().split('T')[0]);
       setSelectedMembers(groupMembers);
       setSuccess("Expense added successfully!");
-      
-      // Clear success message after 3 seconds
       setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
       console.error("Error adding expense: ", error);
@@ -107,7 +86,6 @@ const AddExpense: React.FC<AddExpenseProps> = ({ groupId, groupMembers }) => {
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    // Only allow numbers and decimal point
     if (/^\d*\.?\d{0,2}$/.test(value) || value === '') {
       setAmount(value);
     }
@@ -132,19 +110,16 @@ const AddExpense: React.FC<AddExpenseProps> = ({ groupId, groupMembers }) => {
   return (
     <div className="p-4 bg-white rounded shadow">
       <h2 className="text-2xl font-bold mb-4">Add New Expense</h2>
-      
       {error && (
         <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
           {error}
         </div>
       )}
-      
       {success && (
         <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
           {success}
         </div>
       )}
-      
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="description" className="block text-sm font-medium text-gray-700">
@@ -161,7 +136,6 @@ const AddExpense: React.FC<AddExpenseProps> = ({ groupId, groupMembers }) => {
             disabled={loading}
           />
         </div>
-        
         <div>
           <label htmlFor="amount" className="block text-sm font-medium text-gray-700">
             Amount (₹) *
@@ -177,7 +151,6 @@ const AddExpense: React.FC<AddExpenseProps> = ({ groupId, groupMembers }) => {
             disabled={loading}
           />
         </div>
-        
         <div>
           <label htmlFor="date" className="block text-sm font-medium text-gray-700">
             Date *
@@ -192,7 +165,6 @@ const AddExpense: React.FC<AddExpenseProps> = ({ groupId, groupMembers }) => {
             disabled={loading}
           />
         </div>
-        
         <div>
           <label htmlFor="paidBy" className="block text-sm font-medium text-gray-700">
             Paid By *
@@ -211,12 +183,10 @@ const AddExpense: React.FC<AddExpenseProps> = ({ groupId, groupMembers }) => {
             ))}
           </select>
         </div>
-        
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Split Among *
           </label>
-          
           <div className="mb-2 flex space-x-2">
             <button
               type="button"
@@ -233,7 +203,6 @@ const AddExpense: React.FC<AddExpenseProps> = ({ groupId, groupMembers }) => {
               Select None
             </button>
           </div>
-          
           <div className="space-y-2 max-h-40 overflow-y-auto border rounded p-2">
             {groupMembers.map(member => (
               <div key={member} className="flex items-center">
@@ -251,14 +220,12 @@ const AddExpense: React.FC<AddExpenseProps> = ({ groupId, groupMembers }) => {
               </div>
             ))}
           </div>
-          
           {selectedMembers.length > 0 && (
             <p className="mt-1 text-sm text-gray-500">
               Amount per person: ₹{(parseFloat(amount) / selectedMembers.length).toFixed(2)}
             </p>
           )}
         </div>
-        
         <div className="flex space-x-3">
           <button
             type="submit"
@@ -269,7 +236,6 @@ const AddExpense: React.FC<AddExpenseProps> = ({ groupId, groupMembers }) => {
           >
             {loading ? 'Adding...' : 'Add Expense'}
           </button>
-          
           <button
             type="button"
             onClick={() => {

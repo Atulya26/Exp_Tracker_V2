@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { db, auth } from '../firebaseConfig';
-import { collection, getDocs, doc, deleteDoc, query, where } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
+import { collection, getDocs, doc, deleteDoc, query } from 'firebase/firestore';
 
 interface Group {
   id: string;
@@ -20,17 +20,12 @@ const Home: React.FC = () => {
 
   useEffect(() => {
     const fetchGroups = async () => {
-      if (!auth.currentUser) return;
-      
       try {
         setLoading(true);
         setError(null);
-        
-        // Fetch groups where user is a member or creator
         const groupsCollectionRef = collection(db, 'groups');
         const groupsSnapshot = await getDocs(groupsCollectionRef);
         const fetchedGroups: Group[] = [];
-        
         groupsSnapshot.forEach(doc => {
           const data = doc.data();
           const group = {
@@ -40,14 +35,8 @@ const Home: React.FC = () => {
             createdBy: data.createdBy || '',
             createdAt: data.createdAt?.toDate() || new Date(),
           };
-          
-          // Only show groups where user is a member
-          if (group.members.includes(auth.currentUser?.email || '') || 
-              group.createdBy === auth.currentUser?.uid) {
-            fetchedGroups.push(group);
-          }
+          fetchedGroups.push(group);
         });
-        
         setGroups(fetchedGroups);
       } catch (err) {
         console.error("Error fetching groups:", err);
@@ -56,35 +45,23 @@ const Home: React.FC = () => {
         setLoading(false);
       }
     };
-
     fetchGroups();
   }, []);
 
   const handleDeleteGroup = async (groupId: string, groupName: string) => {
-    if (!auth.currentUser) return;
-    
     if (!window.confirm(`Are you sure you want to delete the group "${groupName}"? This action cannot be undone.`)) {
       return;
     }
-
     try {
       setDeletingGroup(groupId);
-      
-      // Delete expenses associated with the group
       const expensesQuery = query(collection(db, 'groups', groupId, 'expenses'));
       const expensesSnapshot = await getDocs(expensesQuery);
       const deletePromises: Promise<void>[] = [];
-      
       expensesSnapshot.forEach((expenseDoc) => {
         deletePromises.push(deleteDoc(doc(db, 'groups', groupId, 'expenses', expenseDoc.id)));
       });
-      
       await Promise.all(deletePromises);
-
-      // Delete the group document
       await deleteDoc(doc(db, 'groups', groupId));
-
-      // Update local state
       setGroups(prevGroups => prevGroups.filter(group => group.id !== groupId));
       alert(`Group "${groupName}" deleted successfully.`);
     } catch (error) {
@@ -110,15 +87,13 @@ const Home: React.FC = () => {
     <div className="p-4 bg-white rounded shadow">
       <h2 className="text-2xl font-bold mb-4">Welcome to Expense Splitter</h2>
       <p className="mb-4">Select an existing group or create a new one.</p>
-
       {error && (
         <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
           {error}
         </div>
       )}
-
       <div className="mb-6">
-        <h3 className="text-xl font-semibold mb-2">Your Groups</h3>
+        <h3 className="text-xl font-semibold mb-2">All Groups</h3>
         {groups.length === 0 ? (
           <p className="text-gray-600">No groups available. Create one to get started!</p>
         ) : (
@@ -150,7 +125,6 @@ const Home: React.FC = () => {
           </ul>
         )}
       </div>
-
       <div>
         <h3 className="text-xl font-semibold mb-2">Create New Group</h3>
         <button

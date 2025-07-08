@@ -28,42 +28,50 @@ interface BalanceViewProps {
 
 const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [settlingIndex, setSettlingIndex] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
+  // Improved balance calculation with precision handling
   const calculateTransactions = useCallback((expenses: Expense[]) => {
     const balances: { [key: string]: number } = {};
     groupMembers.forEach(member => { balances[member] = 0; });
 
     expenses.forEach(expense => {
       if (expense.splitType === 'settlement') {
-        balances[expense.paidBy] += expense.amount;
-        balances[expense.members[0]] -= expense.amount;
+        balances[expense.paidBy] = +(balances[expense.paidBy] + expense.amount).toFixed(2);
+        balances[expense.members[0]] = +(balances[expense.members[0]] - expense.amount).toFixed(2);
       } else {
         if (expense.members.length === 0) return;
-        const amountPerPerson = expense.amount / expense.members.length;
-        balances[expense.paidBy] += expense.amount;
+        const amountPerPerson = +(expense.amount / expense.members.length).toFixed(2);
+        balances[expense.paidBy] = +(balances[expense.paidBy] + expense.amount).toFixed(2);
         expense.members.forEach(member => {
-          balances[member] -= amountPerPerson;
+          balances[member] = +(balances[member] - amountPerPerson).toFixed(2);
         });
       }
     });
 
-    const debtors = Object.entries(balances).filter(([, balance]) => balance < 0).map(([person, balance]) => ({ person, amount: -balance }));
-    const creditors = Object.entries(balances).filter(([, balance]) => balance > 0).map(([person, balance]) => ({ person, amount: balance }));
+    // Filter out near-zero balances due to floating point
+    Object.keys(balances).forEach(key => {
+      if (Math.abs(balances[key]) < 0.01) balances[key] = 0;
+    });
+
+    const debtors = Object.entries(balances).filter(([, balance]) => balance < 0).map(([person, balance]) => ({ person, amount: +(-balance).toFixed(2) }));
+    const creditors = Object.entries(balances).filter(([, balance]) => balance > 0).map(([person, balance]) => ({ person, amount: +balance.toFixed(2) }));
 
     const newTransactions: Transaction[] = [];
-
+    let creditorsCopy = creditors.map(c => ({ ...c }));
     debtors.forEach(debtor => {
       let debt = debtor.amount;
-      creditors.forEach(creditor => {
+      for (let creditor of creditorsCopy) {
         if (debt > 0 && creditor.amount > 0) {
           const amountToPay = Math.min(debt, creditor.amount);
           newTransactions.push({ from: debtor.person, to: creditor.person, amount: amountToPay });
-          debt -= amountToPay;
-          creditor.amount -= amountToPay;
+          debt = +(debt - amountToPay).toFixed(2);
+          creditor.amount = +(creditor.amount - amountToPay).toFixed(2);
         }
-      });
+      }
     });
-
     setTransactions(newTransactions);
   }, [groupMembers]);
 
@@ -92,17 +100,27 @@ const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
     return () => unsubscribe();
   }, [groupId, groupMembers, calculateTransactions]);
 
-  const settleTransaction = async (from: string, to: string, amount: number) => {
+  const settleTransaction = async (from: string, to: string, amount: number, index: number) => {
     if (!groupId) return;
-
-    await addDoc(collection(db, 'groups', groupId, 'expenses'), {
-      description: `Settlement: ${from} to ${to}`,
-      amount: amount,
-      paidBy: from,
-      members: [to],
-      splitType: 'settlement',
-      createdAt: serverTimestamp(),
-    });
+    setSettlingIndex(index);
+    setError(null);
+    setSuccess(null);
+    try {
+      await addDoc(collection(db, 'groups', groupId, 'expenses'), {
+        description: `Settlement: ${from} to ${to}`,
+        amount: amount,
+        paidBy: from,
+        members: [to],
+        splitType: 'settlement',
+        createdAt: serverTimestamp(),
+      });
+      setSuccess(`Settled: ${from} → ${to} (₹${amount.toFixed(2)})`);
+    } catch (err: any) {
+      setError('Failed to settle transaction. Please try again.');
+      console.error(err);
+    } finally {
+      setSettlingIndex(null);
+    }
   };
 
   const handleSettleAll = async () => {
@@ -219,6 +237,8 @@ const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
       >
         Settle All & Download Report
       </button>
+      {error && <div className="mb-2 text-red-600">{error}</div>}
+      {success && <div className="mb-2 text-green-600">{success}</div>}
       {transactions.length === 0 ? (
         <p>No balances to display yet.</p>
       ) : (
@@ -230,10 +250,11 @@ const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
               <span className="font-medium">{transaction.to}</span>
               <span className="text-green-600">₹{transaction.amount.toFixed(2)}</span>
               <button
-                onClick={() => settleTransaction(transaction.from, transaction.to, transaction.amount)}
-                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded"
+                onClick={() => settleTransaction(transaction.from, transaction.to, transaction.amount, index)}
+                className={`bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded ${settlingIndex === index ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={settlingIndex === index}
               >
-                Settle
+                {settlingIndex === index ? 'Settling...' : 'Settle'}
               </button>
             </div>
           ))}

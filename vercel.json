@@ -1,4 +1,5 @@
 {
   "buildCommand": "npm run build",
-  "rootDirectory": "expense-splitter"
+  "rootDirectory": "expense-splitter",
+  "installCommand": "npm install --prefix expense-splitter"
 }

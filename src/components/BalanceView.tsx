@@ -29,6 +29,7 @@ interface BalanceViewProps {
 const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [settlingIndex, setSettlingIndex] = useState<number | null>(null);
+  const [settlingAll, setSettlingAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -131,6 +132,10 @@ const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
     }
 
     try {
+      setError(null);
+      setSuccess(null);
+      setSettlingAll(true); // Start loading
+      
       // 1. Fetch all expenses
       const expensesRef = collection(db, 'groups', groupId, 'expenses');
       const expensesSnapshot = await getDocs(expensesRef);
@@ -143,45 +148,51 @@ const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
           amount: data.amount,
           date: data.date.toDate(),
           paidBy: data.paidBy,
-          members: data.members,
+          members: data.members || [],
           splitType: data.splitType,
-          createdAt: data.createdAt.toDate(),
+          createdAt: data.createdAt?.toDate() || new Date(),
         });
       });
 
-      // 2. Calculate current balances (re-using existing logic)
+      // 2. Calculate current balances using the same improved logic
       const balances: { [key: string]: number } = {};
       groupMembers.forEach(member => { balances[member] = 0; });
 
       expensesData.forEach(expense => {
         if (expense.splitType === 'settlement') {
-          balances[expense.paidBy] += expense.amount;
-          balances[expense.members[0]] -= expense.amount;
+          balances[expense.paidBy] = +(balances[expense.paidBy] + expense.amount).toFixed(2);
+          balances[expense.members[0]] = +(balances[expense.members[0]] - expense.amount).toFixed(2);
         } else {
           if (expense.members.length === 0) return;
-          const amountPerPerson = expense.amount / expense.members.length;
-          balances[expense.paidBy] += expense.amount;
+          const amountPerPerson = +(expense.amount / expense.members.length).toFixed(2);
+          balances[expense.paidBy] = +(balances[expense.paidBy] + expense.amount).toFixed(2);
           expense.members.forEach(member => {
-            balances[member] -= amountPerPerson;
+            balances[member] = +(balances[member] - amountPerPerson).toFixed(2);
           });
         }
       });
 
-      const debtors = Object.entries(balances).filter(([, balance]) => balance < 0).map(([person, balance]) => ({ person, amount: -balance }));
-      const creditors = Object.entries(balances).filter(([, balance]) => balance > 0).map(([person, balance]) => ({ person, amount: balance }));
+      // Filter out near-zero balances due to floating point
+      Object.keys(balances).forEach(key => {
+        if (Math.abs(balances[key]) < 0.01) balances[key] = 0;
+      });
+
+      const debtors = Object.entries(balances).filter(([, balance]) => balance < 0).map(([person, balance]) => ({ person, amount: +(-balance).toFixed(2) }));
+      const creditors = Object.entries(balances).filter(([, balance]) => balance > 0).map(([person, balance]) => ({ person, amount: +balance.toFixed(2) }));
 
       const finalTransactions: Transaction[] = [];
-
+      let creditorsCopy = creditors.map(c => ({ ...c }));
+      
       debtors.forEach(debtor => {
         let debt = debtor.amount;
-        creditors.forEach(creditor => {
+        for (let creditor of creditorsCopy) {
           if (debt > 0 && creditor.amount > 0) {
             const amountToPay = Math.min(debt, creditor.amount);
             finalTransactions.push({ from: debtor.person, to: creditor.person, amount: amountToPay });
-            debt -= amountToPay;
-            creditor.amount -= amountToPay;
+            debt = +(debt - amountToPay).toFixed(2);
+            creditor.amount = +(creditor.amount - amountToPay).toFixed(2);
           }
-        });
+        }
       });
 
       // 3. Prepare data for XLSX
@@ -220,11 +231,13 @@ const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
 
       // 6. Clear displayed transactions
       setTransactions([]);
-      alert("All expenses settled and report downloaded!");
+      setSuccess("All expenses settled and report downloaded successfully!");
 
     } catch (error) {
       console.error("Error settling all expenses: ", error);
-      alert("Failed to settle all expenses. Please try again.");
+      setError("Failed to settle all expenses. Please try again.");
+    } finally {
+      setSettlingAll(false); // End loading
     }
   };
 
@@ -233,9 +246,12 @@ const BalanceView: React.FC<BalanceViewProps> = ({ groupId, groupMembers }) => {
       <h2 className="text-2xl font-bold mb-4">Balances</h2>
       <button
         onClick={handleSettleAll}
-        className="mb-4 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+        disabled={settlingAll}
+        className={`mb-4 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
+          settlingAll ? 'opacity-50 cursor-not-allowed' : ''
+        }`}
       >
-        Settle All & Download Report
+        {settlingAll ? 'Settling...' : 'Settle All & Download Report'}
       </button>
       {error && <div className="mb-2 text-red-600">{error}</div>}
       {success && <div className="mb-2 text-green-600">{success}</div>}
